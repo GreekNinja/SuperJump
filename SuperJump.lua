@@ -1,5 +1,27 @@
-local player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+
+local MAX_POWER = 100
+local DEFAULT_JUMP_POWER = 50
+local COLORS = {
+	Background = Color3.fromRGB(28, 30, 34),
+	Primary = Color3.fromRGB(45, 48, 54),
+	AccentOn = Color3.fromRGB(0, 255, 128),
+	AccentOff = Color3.fromRGB(80, 80, 80),
+	TextPrimary = Color3.fromRGB(255, 255, 255),
+	TextSecondary = Color3.fromRGB(180, 255, 200),
+	Unload = Color3.fromRGB(190, 60, 60)
+}
+
+local jumpEnabled = false
+local currentJumpPower = DEFAULT_JUMP_POWER
+local draggingSlider = false
+local connections = {}
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "JumpBoostUI"
@@ -7,235 +29,254 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 260, 0, 170)
-frame.Position = UDim2.new(0.05, 0, 0.6, 0)
-frame.BackgroundColor3 = Color3.fromRGB(20, 50, 30)
+frame.Size = UDim2.new(0, 260, 0, 190)
+frame.Position = UDim2.new(0.05, 0, 0.5, -95)
+frame.BackgroundColor3 = COLORS.Background
 frame.BorderSizePixel = 0
-frame.BackgroundTransparency = 0.1
-frame.Parent = screenGui
 frame.Active = true
 frame.Draggable = true
+frame.Parent = screenGui
 
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 12)
 corner.Parent = frame
 
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(60, 60, 60)
+stroke.Thickness = 1
+stroke.Parent = frame
+
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 35)
+header.Position = UDim2.new(0, 0, 0, 0)
+header.BackgroundTransparency = 1
+header.Parent = frame
+
+local headerLayout = Instance.new("UIListLayout")
+headerLayout.FillDirection = Enum.FillDirection.Horizontal
+headerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+headerLayout.Padding = UDim.new(0, 5)
+headerLayout.Parent = header
+
+local padding = Instance.new("UIPadding")
+padding.PaddingLeft = UDim.new(0, 10)
+padding.PaddingRight = UDim.new(0, 10)
+padding.Parent = header
+
 local title = Instance.new("TextLabel")
 title.Text = "Jump Boost"
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
-title.TextColor3 = Color3.fromRGB(180, 255, 200)
+title.TextColor3 = COLORS.TextSecondary
 title.BackgroundTransparency = 1
-title.Position = UDim2.new(0, 10, 0, 5)
-title.Size = UDim2.new(0, 120, 0, 25)
+title.Size = UDim2.new(1, -110, 1, 0)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = frame
+title.Parent = header
 
 local minimize = Instance.new("TextButton")
 minimize.Size = UDim2.new(0, 25, 0, 25)
-minimize.Position = UDim2.new(0, 135, 0, 5)
-minimize.Text = "-"
+minimize.Text = "—"
 minimize.Font = Enum.Font.GothamBold
 minimize.TextSize = 18
-minimize.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimize.BackgroundColor3 = Color3.fromRGB(40, 80, 50)
-minimize.Parent = frame
-
-local minimizeCorner = Instance.new("UICorner")
-minimizeCorner.CornerRadius = UDim.new(0, 6)
-minimizeCorner.Parent = minimize
+minimize.TextColor3 = COLORS.TextPrimary
+minimize.BackgroundColor3 = COLORS.Primary
+minimize.Parent = header
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0, 6)
 
 local unload = Instance.new("TextButton")
-unload.Size = UDim2.new(0, 60, 0, 25)
-unload.Position = UDim2.new(0, 170, 0, 5)
+unload.Size = UDim2.new(0, 70, 0, 25)
 unload.Text = "Unload"
-unload.Font = Enum.Font.Gotham
+unload.Font = Enum.Font.GothamBold
 unload.TextSize = 14
-unload.TextColor3 = Color3.fromRGB(255, 255, 255)
-unload.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-unload.Parent = frame
+unload.TextColor3 = COLORS.TextPrimary
+unload.BackgroundColor3 = COLORS.Unload
+unload.Parent = header
+Instance.new("UICorner", unload).CornerRadius = UDim.new(0, 6)
 
-local unloadCorner = Instance.new("UICorner")
-unloadCorner.CornerRadius = UDim.new(0, 6)
-unloadCorner.Parent = unload
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, -20, 1, -55)
+content.Position = UDim2.new(0, 10, 0, 40)
+content.BackgroundTransparency = 1
+content.Parent = frame
+
+local contentLayout = Instance.new("UIListLayout")
+contentLayout.FillDirection = Enum.FillDirection.Vertical
+contentLayout.Padding = UDim.new(0, 10)
+contentLayout.Parent = content
 
 local toggle = Instance.new("TextButton")
-toggle.Size = UDim2.new(0, 100, 0, 30)
-toggle.Position = UDim2.new(0, 10, 0, 40)
+toggle.Size = UDim2.new(1, 0, 0, 30)
 toggle.Text = "OFF"
-toggle.Font = Enum.Font.Gotham
+toggle.Font = Enum.Font.GothamBold
 toggle.TextSize = 16
-toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggle.BackgroundColor3 = Color3.fromRGB(60, 100, 70)
-toggle.Parent = frame
-
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 10)
-toggleCorner.Parent = toggle
+toggle.TextColor3 = COLORS.TextPrimary
+toggle.BackgroundColor3 = COLORS.AccentOff
+toggle.Parent = content
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 8)
 
 local sliderBack = Instance.new("Frame")
-sliderBack.Size = UDim2.new(0, 200, 0, 10)
-sliderBack.Position = UDim2.new(0, 10, 0, 85)
-sliderBack.BackgroundColor3 = Color3.fromRGB(50, 100, 70)
+sliderBack.Size = UDim2.new(1, 0, 0, 10)
+sliderBack.BackgroundColor3 = COLORS.Primary
 sliderBack.BorderSizePixel = 0
-sliderBack.Parent = frame
-
-local sliderCorner = Instance.new("UICorner")
-sliderCorner.CornerRadius = UDim.new(0, 6)
-sliderCorner.Parent = sliderBack
+sliderBack.Parent = content
+Instance.new("UICorner", sliderBack).CornerRadius = UDim.new(0, 6)
 
 local sliderFill = Instance.new("Frame")
 sliderFill.Size = UDim2.new(0, 0, 1, 0)
-sliderFill.BackgroundColor3 = Color3.fromRGB(0, 255, 128)
+sliderFill.BackgroundColor3 = COLORS.AccentOn
 sliderFill.BorderSizePixel = 0
 sliderFill.Parent = sliderBack
-
-local sliderFillCorner = Instance.new("UICorner")
-sliderFillCorner.CornerRadius = UDim.new(0, 6)
-sliderFillCorner.Parent = sliderFill
+Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 6)
 
 local jumpPowerLabel = Instance.new("TextLabel")
-jumpPowerLabel.Text = "Jump Power: 55"
+jumpPowerLabel.Text = "Jump Power: " .. DEFAULT_JUMP_POWER
 jumpPowerLabel.Font = Enum.Font.Gotham
 jumpPowerLabel.TextSize = 16
-jumpPowerLabel.TextColor3 = Color3.fromRGB(180, 255, 200)
+jumpPowerLabel.TextColor3 = COLORS.TextSecondary
 jumpPowerLabel.BackgroundTransparency = 1
-jumpPowerLabel.Position = UDim2.new(0, 10, 0, 95)
-jumpPowerLabel.Size = UDim2.new(1, -20, 0, 25)
+jumpPowerLabel.Size = UDim2.new(1, 0, 0, 20)
 jumpPowerLabel.TextXAlignment = Enum.TextXAlignment.Left
-jumpPowerLabel.Parent = frame
+jumpPowerLabel.Parent = content
 
 local inputBox = Instance.new("TextBox")
 inputBox.PlaceholderText = "Type value (1-100)"
-inputBox.Text = "55"
+inputBox.Text = tostring(DEFAULT_JUMP_POWER)
 inputBox.Font = Enum.Font.Gotham
 inputBox.TextSize = 16
-inputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-inputBox.BackgroundColor3 = Color3.fromRGB(40, 80, 50)
-inputBox.Position = UDim2.new(0, 10, 0, 120)
-inputBox.Size = UDim2.new(0, 200, 0, 25)
-inputBox.Parent = frame
-
-local inputCorner = Instance.new("UICorner")
-inputCorner.CornerRadius = UDim.new(0, 6)
-inputCorner.Parent = inputBox
+inputBox.TextColor3 = COLORS.TextPrimary
+inputBox.BackgroundColor3 = COLORS.Primary
+inputBox.Size = UDim2.new(1, 0, 0, 25)
+inputBox.Parent = content
+Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 6)
 
 local credits = Instance.new("TextLabel")
-credits.Text = "GreekNinja30 X ThanasisYAMA"
+credits.Text = player.Name
 credits.Font = Enum.Font.GothamBold
 credits.TextSize = 14
-credits.TextColor3 = Color3.fromRGB(0, 255, 128)
+credits.TextColor3 = COLORS.AccentOn
 credits.BackgroundTransparency = 1
-credits.Position = UDim2.new(0, 10, 0, 150)
-credits.Size = UDim2.new(1, -20, 0, 20)
-credits.TextXAlignment = Enum.TextXAlignment.Left
+credits.Size = UDim2.new(1, 0, 0, 20)
+credits.Position = UDim2.new(0, 0, 1, -20)
+credits.TextXAlignment = Enum.TextXAlignment.Center
 credits.Parent = frame
 
-local jumpEnabled = false
-local jumpPower = 55
-local maxPower = 100
-local humanoid = nil
-
-local UIS = game:GetService("UserInputService")
-local draggingSlider = false
-
-local function updateSlider(value)
-	sliderFill.Size = UDim2.new(value / maxPower, 0, 1, 0)
-	jumpPowerLabel.Text = "Jump Power: " .. math.floor(value)
+local function updateJumpPower(power)
+	currentJumpPower = math.clamp(tonumber(power) or currentJumpPower, 1, MAX_POWER)
+	
+	local goal = { Size = UDim2.new(currentJumpPower / MAX_POWER, 0, 1, 0) }
+	local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local tween = TweenService:Create(sliderFill, tweenInfo, goal)
+	tween:Play()
+	
+	jumpPowerLabel.Text = "Jump Power: " .. math.floor(currentJumpPower)
+	inputBox.Text = tostring(math.floor(currentJumpPower))
+	
+	if jumpEnabled and humanoid then
+		humanoid.UseJumpPower = true
+		humanoid.JumpPower = currentJumpPower
+	end
 end
 
 local function toggleJump()
 	jumpEnabled = not jumpEnabled
+	
+	local color = jumpEnabled and COLORS.AccentOn or COLORS.AccentOff
+	local text = jumpEnabled and "ON" or "OFF"
+	
+	local tweenInfo = TweenInfo.new(0.3)
+	local tween = TweenService:Create(toggle, tweenInfo, { BackgroundColor3 = color })
+	tween:Play()
+	toggle.Text = text
+	
 	if jumpEnabled then
-		toggle.Text = "ON"
-		toggle.BackgroundColor3 = Color3.fromRGB(0, 255, 128)
 		if humanoid then
 			humanoid.UseJumpPower = true
-			humanoid.JumpPower = jumpPower
+			humanoid.JumpPower = currentJumpPower
 		end
 	else
-		toggle.Text = "OFF"
-		toggle.BackgroundColor3 = Color3.fromRGB(60, 100, 70)
 		if humanoid then
-			humanoid.JumpPower = 50
+			humanoid.JumpPower = DEFAULT_JUMP_POWER
 		end
 	end
 end
 
-toggle.MouseButton1Click:Connect(toggleJump)
+local function cleanup()
+	if humanoid then
+		humanoid.JumpPower = DEFAULT_JUMP_POWER
+	end
+	
+	for _, connection in ipairs(connections) do
+		connection:Disconnect()
+	end
+	
+	if screenGui then
+		screenGui:Destroy()
+	end
+end
 
-sliderBack.InputBegan:Connect(function(input)
+table.insert(connections, toggle.MouseButton1Click:Connect(toggleJump))
+
+table.insert(connections, sliderBack.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		draggingSlider = true
+		local relPos = (input.Position.X - sliderBack.AbsolutePosition.X) / sliderBack.AbsoluteSize.X
+		updateJumpPower(relPos * MAX_POWER)
 	end
-end)
+end))
 
-UIS.InputEnded:Connect(function(input)
+table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local relPos = (input.Position.X - sliderBack.AbsolutePosition.X) / sliderBack.AbsoluteSize.X
+		updateJumpPower(relPos * MAX_POWER)
+	end
+end))
+
+table.insert(connections, UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		draggingSlider = false
 	end
-end)
+end))
 
-UIS.InputChanged:Connect(function(input)
-	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
-		local relPos = math.clamp((input.Position.X - sliderBack.AbsolutePosition.X) / sliderBack.AbsoluteSize.X, 0, 1)
-		jumpPower = math.floor(relPos * maxPower)
-		updateSlider(jumpPower)
-		inputBox.Text = tostring(jumpPower)
-		if jumpEnabled and humanoid then
-			humanoid.JumpPower = jumpPower
-		end
-	end
-end)
+table.insert(connections, inputBox.FocusLost:Connect(function(enterPressed)
+	updateJumpPower(inputBox.Text)
+end))
 
-inputBox.FocusLost:Connect(function(enterPressed)
-	local num = tonumber(inputBox.Text)
-	if num then
-		num = math.clamp(num, 1, maxPower)
-		jumpPower = num
-		updateSlider(jumpPower)
-		if jumpEnabled and humanoid then
-			humanoid.JumpPower = jumpPower
-		end
-	else
-		inputBox.Text = tostring(jumpPower)
-	end
-end)
-
-player.CharacterAdded:Connect(function(char)
+table.insert(connections, player.CharacterAdded:Connect(function(char)
 	humanoid = char:WaitForChild("Humanoid")
 	if jumpEnabled then
 		humanoid.UseJumpPower = true
-		humanoid.JumpPower = jumpPower
+		humanoid.JumpPower = currentJumpPower
+	else
+		humanoid.JumpPower = DEFAULT_JUMP_POWER
 	end
-end)
+end))
 
-if player.Character then
-	humanoid = player.Character:WaitForChild("Humanoid")
-end
-
-updateSlider(jumpPower)
-
-minimize.MouseButton1Click:Connect(function()
+table.insert(connections, minimize.MouseButton1Click:Connect(function()
 	frame.Visible = false
+	
 	local reopen = Instance.new("TextButton")
-	reopen.Size = UDim2.new(0, 100, 0, 30)
-	reopen.Position = UDim2.new(0.05, 0, 0.9, 0)
-	reopen.Text = "Open Jump Boost"
+	reopen.Size = UDim2.new(0, 150, 0, 35)
+	reopen.Position = UDim2.new(0.5, -75, 0.02, 0)
+	reopen.Text = "Reopen Jump Boost"
 	reopen.Font = Enum.Font.GothamBold
 	reopen.TextSize = 16
-	reopen.BackgroundColor3 = Color3.fromRGB(40, 80, 50)
-	reopen.TextColor3 = Color3.fromRGB(255, 255, 255)
+	reopen.BackgroundColor3 = COLORS.Background
+	reopen.TextColor3 = COLORS.TextPrimary
 	reopen.Parent = screenGui
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
-	c.Parent = reopen
-	reopen.MouseButton1Click:Connect(function()
+	
+	local reopenCorner = Instance.new("UICorner", reopen)
+	reopenCorner.CornerRadius = UDim.new(0, 8)
+	local reopenStroke = Instance.new("UIStroke", reopen)
+	reopenStroke.Color = Color3.fromRGB(60, 60, 60)
+	
+	local reopenClickConnection
+	reopenClickConnection = reopen.MouseButton1Click:Connect(function()
 		frame.Visible = true
 		reopen:Destroy()
+		reopenClickConnection:Disconnect()
 	end)
-end)
+end))
 
-unload.MouseButton1Click:Connect(function()
-	screenGui:Destroy()
-end)
+table.insert(connections, unload.MouseButton1Click:Connect(cleanup))
+
+updateJumpPower(DEFAULT_JUMP_POWER)
